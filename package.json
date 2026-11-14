@@ -1,0 +1,12 @@
+{
+  "name": "chiku-edits",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chiku Edits portfolio website with AI assistant",
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
