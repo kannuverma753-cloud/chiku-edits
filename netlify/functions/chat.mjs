@@ -4,7 +4,7 @@
 //  API key is read ONLY from the server environment variable API_KEY.
 // =====================================================================
 
-const MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+const MODEL = (process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite').trim();
 const ENDPOINT = (m) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`;
 
@@ -87,7 +87,7 @@ const json = (obj, status = 200) =>
 export default async (req, context) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
-  const apiKey = process.env.API_KEY;
+  const apiKey = (process.env.API_KEY || '').replace(/[\s\u200B-\u200D\uFEFF"']/g, '');
   if (!apiKey) {
     console.error('API_KEY environment variable is missing');
     return json({ error: 'Assistant is not configured yet.' }, 500);
@@ -103,7 +103,7 @@ export default async (req, context) => {
   if (!contents.length || contents[contents.length - 1].role !== 'user') return json({ error: 'Please send a message.' }, 400);
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 25000);
+  const timer = setTimeout(() => controller.abort(), 9000);
   try {
     const r = await fetch(ENDPOINT(MODEL), {
       method: 'POST',
@@ -118,11 +118,12 @@ export default async (req, context) => {
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
       console.error('Gemini error', r.status, data?.error?.status, data?.error?.message);
+      const gcode = `${r.status}${data?.error?.status ? ' ' + data.error.status : ''}`;
       const status = r.status === 429 ? 429 : 502;
       return json({
         error: status === 429
           ? 'Abhi bahut log baat kar rahe hain — thodi der baad try karo.'
-          : 'AI se connect nahi ho paaya. Thodi der baad try karo, ya WhatsApp pe seedha baat karo.',
+          : `AI se connect nahi ho paaya (${gcode}). Thodi der baad try karo, ya WhatsApp pe seedha baat karo.`,
       }, status);
     }
     const parts = data?.candidates?.[0]?.content?.parts || [];
@@ -131,7 +132,8 @@ export default async (req, context) => {
   } catch (err) {
     const aborted = err && err.name === 'AbortError';
     console.error('Chat function error:', aborted ? 'timeout' : err?.message);
-    return json({ error: 'Network issue — dobara try karo.' }, aborted ? 504 : 500);
+    const code = aborted ? 'TIMEOUT' : (err?.cause?.code || err?.name || 'ERR');
+    return json({ error: aborted ? 'AI ne jawab dene mein zyada time le liya — dobara try karo.' : `Network issue — dobara try karo. (${code})` }, aborted ? 504 : 500);
   } finally {
     clearTimeout(timer);
   }
